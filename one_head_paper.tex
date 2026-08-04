@@ -62,7 +62,11 @@ pure dot-product scores at head dimension
 \(128\) once \(n\ge4166\).  The same
 exact-real, float32-range assumptions require ambient head dimension above
 \(252\) at \(n=8192\).  A finite-size audit places the construction between a
-row-weighted determinant bound and its closed-form budget.  Every statement
+row-weighted determinant bound and its closed-form budget.  A content-adaptive
+extension holds on Boolean payloads: when the scores may read the averaged
+bits through a linear channel, the all-zero realization is forced entrywise
+close to causal prefix attention, and the fixed-rank law is unchanged.  Every
+other statement
 concerns one fixed pure dot-product attention matrix and holds uniformly over
 bounded value streams while that matrix stays fixed.
 \end{abstract}
@@ -103,7 +107,9 @@ length when \(p>3/2\).  The excluded lengths in Section~\ref{sec:numerical}
 sit one to two orders of magnitude below deployed decoder contexts.
 
 The result concerns one fixed, length-specific pure dot-product matrix evaluated
-uniformly over bounded value streams.  Section~\ref{sec:scope} states the
+uniformly over bounded value streams.
+Section~\ref{sec:adaptive} extends the fixed-rank law to scores that adapt
+to a Boolean payload.  Section~\ref{sec:scope} states the
 remaining model boundaries and collects the open questions.
 
 The table compares the realizations at a common accuracy \(\varepsilon\).  Its
@@ -620,6 +626,77 @@ For scale, deployed decoder contexts run from \(1.3\times10^{5}\) to beyond
 the table lies below \(4.2\times10^{3}\), and the anchor length \(n=8192\)
 is a sixteenth of the shorter figure.
 
+\section{Content-adaptive scores}\label{sec:adaptive}
+
+The bounds so far hold one score matrix fixed while value streams vary.
+This section removes that restriction for a Boolean payload class: the
+scores may read the payload they average, and the fixed-rank law is
+unchanged.
+
+Position \(j\) carries a payload bit \(v_j\in\{0,1\}\) and the embedding
+\(x_j=e_j+v_ju_j\), with free position-indexed vectors \(e_j,u_j\).  A head
+computes \(q_i=Qx_i\), \(k_j=Kx_j\) with \(Q,K\in\R^{d_h\times d}\), applies
+the unmasked row softmax \(A(v)\) of \(S(v)_{ij}=\langle q_i,k_j\rangle\)
+over the exact reals, and outputs \((A(v)v)_i\).  The head is
+\emph{\(\varepsilon\)-accurate} when
+\(|(A(v)v)_i-\frac1i\sum_{j\le i}v_j|\le\varepsilon\) for every payload
+\(v\in\{0,1\}^n\) and every nonterminal row \(i\).  Write
+\(B_\infty=\max_v B(S(v))\); the maximum includes \(v=0\).  Every realized
+score matrix factors through the head, so \(\rho(S(v))\le d_h\) for every
+\(v\).
+
+\begin{theorem}[Adaptive extraction]\label{thm:adaptive}
+Let a head be \(\varepsilon\)-accurate.  For every row \(i\ge12\) with
+\(i\varepsilon\le10^{-3}\),
+\[
+ \max_j|A(0)_{ij}-T(i,j)|\le286\,\varepsilon,
+\]
+and row \(i\) of \(S(0)\) has a causal profile on every \(I\) with
+\[
+ \delta_i\le1144\,i\varepsilon,
+ \qquad
+ \gamma_i\ge\log\frac1{192\,i\varepsilon}.
+\]
+\end{theorem}
+
+The mechanism is exact rational algebra on one face.  Fixing \(v_i=0\)
+freezes the query of row \(i\); a payload bit then switches only its own key
+column, and the output on the payload \(\one_X\) is an explicit odds
+expression in the \(2(n-1)\) baseline and switched weights.  Averages of the
+accuracy constraint over two central Hamming layers, with a leave-one-out
+difference, pin every prefix weight to \(1/i\); switching every future bit
+on forces a sum of two nonnegative masses below \(32\varepsilon\), so future
+weight cannot hide in cancellation.  Appendix~\ref{app:adaptive} gives the
+proof.
+
+For \(0<\varepsilon<1\) and \(1\le r\), let
+\(B^{\rm ad}_{r}(n,\varepsilon)\) denote the infimum of \(B_\infty\) over
+\(\varepsilon\)-accurate heads with \(d_h\le r\), and
+\(B^{\rm ad}_{r,p}(n)=B^{\rm ad}_r(n,n^{-p})\).
+
+\begin{corollary}[Adaptation does not change the law]\label{cor:adaptive}
+For every fixed \(p>1\) and fixed positive integer \(r\),
+\[
+ \log B^{\rm ad}_{r,p}(n)
+ =\frac{n-1}{r}\bigl((p-1)\log n+\log\log n+O_{p,r}(1)\bigr).
+\]
+\end{corollary}
+
+The lower half applies Theorem~\ref{thm:subset} to the single witness
+\(S(0)\), whose centered rank is at most \(r\); the Boolean class is used
+only to force the witness's profile.  The upper half embeds the fixed
+construction of Theorem~\ref{thm:upper} adaptively with \(u_j=0\).  Content
+adaptation through a linear payload channel therefore buys nothing at fixed
+rank: the two-term law is a property of the head, not of the fixed-matrix
+idealization.
+
+\begin{corollary}[Counting threshold]\label{cor:adaptivewidth}
+There are absolute constants such that every \(\varepsilon\)-accurate head
+with \(\varepsilon<1/(2n)\) satisfies
+\(d_h=\Omega\bigl(\sqrt{n/(\log B_\infty+\log n)}\bigr)\); in particular
+\(B_\infty\le n^C\) forces \(d_h=\Omega_C\bigl(\sqrt{n/\log n}\bigr)\).
+\end{corollary}
+
 \section{Related work}
 
 Dimension bottlenecks give the nearest architectural statements.  Projection
@@ -678,8 +755,8 @@ the centered logit radius must reach \(\exp(\Theta(n\log n/r))\), so a
 position-indexed score matrix that replaces an architectural support boundary
 pays a cost the masked realization does not.  The statement concerns one
 fixed score matrix at one length, evaluated uniformly over bounded value
-streams, and makes no claim about trained content-adaptive queries and keys,
-whose scores vary with the input.
+streams; Section~\ref{sec:adaptive} extends the fixed-rank law to
+payload-adaptive scores, and no claim concerns trained heads.
 
 \vspace{.65ex}
 \section{Scope and open problems}\label{sec:scope}
@@ -688,7 +765,8 @@ The theorem concerns a fixed attention matrix that stays constant across
 bounded value probes.  Taking \(V=I_n\) reveals the matrix in one pass, while
 scalar probes give an equivalent test.  Content-adaptive queries and keys need
 probe channels decoupled from their computation, for example value channels
-that the query and key projections ignore.  The model grants free
+that the query and key projections ignore; Section~\ref{sec:adaptive}
+removes this requirement for Boolean payloads read through a linear channel.  The model grants free
 position-indexed tables \(Q\) and \(K\) at each length.  A shared positional
 generator and downstream correction fall beyond this matrix-level claim.
 
@@ -699,7 +777,7 @@ Proposition~\ref{prop:fullrank}; its capacity falls beyond the \(d_h\) charge.
 An ALiBi-style decay also has its own positional channel, whose varying prefix
 scores alone fail to give uniform prefix weights.
 
-Four questions remain open: the behavior of Corollary~\ref{cor:budget} at
+Open questions: the behavior of Corollary~\ref{cor:budget} at
 the threshold \(p\in(1,3/2]\); the scale \(\varepsilon\asymp1/n\), where the
 two finite bounds' leading coefficients differ; a two-term law uniform in
 growing rank, where \(-\log r\) meets \(\log\log n\)
@@ -708,7 +786,9 @@ growing rank, where \(-\log r\) meets \(\log\log n\)
 floor in place of exact rank, which would extend the audit of
 Section~\ref{sec:numerical} to measured score matrices.  The row-subset form
 of Theorem~\ref{thm:subset} also invites banded and sliding-window targets,
-whose profile geometry is not treated here, and the permutation count of
+whose profile geometry is not treated here; the growing-rank form of the
+adaptive comparison in Section~\ref{sec:adaptive} is open; and the
+permutation count of
 Lemma~\ref{lem:count} is a natural next step for the Lean development.
 
 \appendix
@@ -986,6 +1066,98 @@ so \(\log G_b\le\log L_\varepsilon+W/r\), where
 Since every \(c_i\ge1\), row \(i\) of \(S\) has entries \(v^I_j/c_i\) of
 magnitude at most \(G_b\).  Its range bounds every centered entry, which gives
 \eqref{eq:upperbudget}.
+\end{proof}
+
+\section{Content-adaptive extraction}\label{app:adaptive}
+
+\begin{proof}[Proof of Theorem~\ref{thm:adaptive}]
+Fix a nonterminal row \(i\ge12\) and restrict to payloads with \(v_i=0\), so
+\(q_i=Qe_i\) is fixed.  Switching bit \(j\ne i\) changes only key \(j\).  At
+the baseline \(v=0\), let
+\[
+ Z_i=\sum_t e^{S(0)_{it}},\qquad
+ p_j=\frac{e^{S(0)_{ij}}}{Z_i},\qquad
+ r_j=\frac{e^{S(e_j)_{ij}}}{Z_i}\quad(j\ne i),
+\]
+and for \(X\subseteq[n]\setminus\{i\}\) put
+\(P_X=\sum_{j\in X}p_j\), \(R_X=\sum_{j\in X}r_j\).  On the payload
+\(\one_X\), exactly the keys in \(X\) are switched and exactly they carry
+value one, so the output is
+\begin{equation}\label{eq:face}
+ F_i(X)=\frac{R_X}{1-P_X+R_X},
+\end{equation}
+and accuracy gives \(|F_i(X)-|X\cap[i-1]|/i|\le\varepsilon\).
+
+Let \(J=[i-1]\), \(k_1=\lfloor i/3\rfloor\), \(k_2=\lfloor2i/3\rfloor\), and
+\(h_k=k/(i-k)\).  The odds map \(t\mapsto t/(1-t)\) sends \(F_i(X)\) to
+\(R_X/(1-P_X)\) and is \(16\)-Lipschitz on \([0,3/4]\); with
+\(i\varepsilon\le10^{-3}\) every target and value lies there for
+\(k\le k_2\).  Hence for every \(k\)-subset \(X\subseteq J\), \(k\le k_2\),
+\begin{equation}\label{eq:oddsline}
+ |R_X+h_kP_X-h_k|\le16\varepsilon .
+\end{equation}
+Let \(H\) be \(J\) or \(J\setminus\{j\}\), \(m_H=|H|\).  Averaging
+\eqref{eq:oddsline} over all \(k_a\)-subsets of \(H\) replaces
+\(R_X,P_X\) by \(\theta_aR_H,\theta_aP_H\) with
+\(\theta_a=k_a/m_H\ge1/4\), so
+\[
+ R_H+h_{k_a}P_H=\frac{m_H}{i-k_a}+E_a,\qquad|E_a|\le64\varepsilon .
+\]
+Since \(\frac{m_H}{i}(1+h_k)=\frac{m_H}{i-k}\), subtracting the two
+equations and using \(h_{k_2}-h_{k_1}\ge9/10\) for \(i\ge12\) gives
+\(|P_H-m_H/i|\le143\varepsilon\).  Applying this to \(H=J\) and
+\(H=J\setminus\{j\}\) and subtracting,
+\begin{equation}\label{eq:pjpin}
+ |p_j-1/i|\le286\varepsilon\qquad(j<i).
+\end{equation}
+
+Let \(L=\{i+1,\ldots,n\}\).  For a \(k_1\)-subset \(Y\subseteq J\), the
+payloads \(\one_Y\) and \(\one_{Y\cup L}\) have the same prefix count, and
+subtracting their versions of \eqref{eq:oddsline} leaves
+\(|R_L+h_{k_1}P_L|\le32\varepsilon\).  Both terms are nonnegative and
+\(h_{k_1}\ge1/3\), so
+\begin{equation}\label{eq:future}
+ P_L\le96\varepsilon,\qquad R_L\le32\varepsilon .
+\end{equation}
+Finally \(p_i=1-P_J-P_L\) gives \(|p_i-1/i|\le239\varepsilon\).  Together
+with \eqref{eq:pjpin} and \eqref{eq:future}, every entry of row \(i\) of
+\(A(0)\) is within \(286\varepsilon\) of \(T(i,\cdot)\).
+
+Score differences are logarithms of probability ratios.  With
+\(286\,i\varepsilon\le1/2\), the prefix oscillation is at most
+\(\log\frac{1+286i\varepsilon}{1-286i\varepsilon}\le1144\,i\varepsilon\),
+and \(p_i\ge1/(2i)\), \(p_{i+1}\le96\varepsilon\) give
+\(S(0)_{i,i+1}-S(0)_{ii}\le\log(192\,i\varepsilon)\).
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:adaptive}]
+Set \(\varepsilon=n^{-p}\).  For all sufficiently large \(n\), every row
+\(i\in I=\{12,\ldots,n-1\}\) satisfies the hypotheses of
+Theorem~\ref{thm:adaptive}, giving on \(I\) the uniform margins
+\(\delta=1144\,n^{1-p}\) and
+\(\gamma=(p-1)\log n-\log192\).  The witness \(S(0)\) has
+\(\rho(S(0))\le r\) and \(B(S(0))\le B_\infty\), so
+Theorem~\ref{thm:subset} applies on \(I\) with \(m=n-12\) rows, and the
+algebra of Theorem~\ref{thm:sharp} yields
+\(\log B_\infty\ge\frac{m}{r}\bigl((p-1)\log n+\log\log n+O_{p,r}(1)\bigr)
++O_p(\log n)\), which absorbs into the stated form.  For the upper half,
+row-center and rank-factor the construction of Theorem~\ref{thm:upper},
+store its query and key factors in the \(e_j\), set \(u_j=0\), and let
+\(Q,K\) select the blocks: a content-independent \(\varepsilon\)-accurate
+head with the same radius.
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:adaptivewidth}]
+Put \(r=d_h\), \(K=10^{7}\), \(M=\lfloor n/(Kr)\rfloor\), and
+\(I=\{\lceil M/2\rceil,\ldots,M\}\).  If \(M<24\) then \(r>n/(25K)\) and
+the claim is immediate.  Otherwise every \(i\in I\) has \(i\ge12\) and
+\(i\varepsilon\le M/(2n)\le10^{-3}\), so Theorem~\ref{thm:adaptive} gives
+uniform margins \(\delta\le572/(Kr)\) and \(\gamma\ge\log(Kr/96)\) on
+\(I\).  If \(r\ge|I|\) then \(r=\Omega(\sqrt{n/K})\).  Otherwise
+Theorem~\ref{thm:subset} on \(I\) with the estimates of
+Theorem~\ref{thm:sharp} gives
+\(\log B_\infty\ge c\,n/r^{2}-\log r-C\), and combining the branches proves
+the statement.
 \end{proof}
 
 \section{Experimental details}\label{app:experiment}
