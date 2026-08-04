@@ -33,5 +33,3 @@ against this repository root.
     pip install mpmath
     python3 experiments/certify_one_head_thresholds.py
     python3 experiments/verify_finite_inequalities.py
-
-License: to be added by the author.
