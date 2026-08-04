@@ -104,7 +104,7 @@ sit one to two orders of magnitude below deployed decoder contexts.
 
 The result concerns one fixed, length-specific pure dot-product matrix evaluated
 uniformly over bounded value streams.  Section~\ref{sec:scope} states the
-remaining model boundaries.
+remaining model boundaries and collects the open questions.
 
 The table compares the realizations at a common accuracy \(\varepsilon\).  Its
 third row uses \(\varepsilon=n^{-p}\) for fixed \(p>1\), where the two-term law
@@ -682,7 +682,7 @@ streams, and makes no claim about trained content-adaptive queries and keys,
 whose scores vary with the input.
 
 \vspace{.65ex}
-\section{Scope}\label{sec:scope}
+\section{Scope and open problems}\label{sec:scope}
 
 The theorem concerns a fixed attention matrix that stays constant across
 bounded value probes.  Taking \(V=I_n\) reveals the matrix in one pass, while
@@ -698,6 +698,18 @@ T5-style bias can carry the full-rank step pattern from
 Proposition~\ref{prop:fullrank}; its capacity falls beyond the \(d_h\) charge.
 An ALiBi-style decay also has its own positional channel, whose varying prefix
 scores alone fail to give uniform prefix weights.
+
+Four questions remain open: the behavior of Corollary~\ref{cor:budget} at
+the threshold \(p\in(1,3/2]\); the scale \(\varepsilon\asymp1/n\), where the
+two finite bounds' leading coefficients differ; a two-term law uniform in
+growing rank, where \(-\log r\) meets \(\log\log n\)
+(Appendix~\ref{app:hadamard}); and a perturbation-stable form of
+\eqref{eq:weighted} charging the singular values of \(SP_0\) above a noise
+floor in place of exact rank, which would extend the audit of
+Section~\ref{sec:numerical} to measured score matrices.  The row-subset form
+of Theorem~\ref{thm:subset} also invites banded and sliding-window targets,
+whose profile geometry is not treated here, and the permutation count of
+Lemma~\ref{lem:count} is a natural next step for the Lean development.
 
 \appendix
 
@@ -985,6 +997,10 @@ The offline executable audit is
 \path{experiments/output/one_head_anchor.csv}, and
 \path{experiments/output/one_head_thresholds.csv}, together with
 \path{experiments/output/environment.txt}.\par}
+
+The manuscript source, the three audit programs, their committed outputs,
+and \path{C17/OneHead.lean} are available at
+\url{https://anonymous.4open.science/r/rank-logit-law}.
 
 The bracket grid uses
 \(n\in\{12,16,20,24,32,40,48,56,64\}\) and
