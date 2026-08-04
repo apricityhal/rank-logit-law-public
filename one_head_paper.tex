@@ -690,6 +690,14 @@ adaptation through a linear payload channel therefore buys nothing at fixed
 rank: the two-term law is a property of the head, not of the fixed-matrix
 idealization.
 
+\begin{corollary}[Adaptive radius budget]\label{cor:adaptivebudget}
+Fix \(p>3/2\) and \(c>0\).  An \(\varepsilon\)-accurate head with
+\(\varepsilon=n^{-p}\) and \(B_\infty\le n^c\) has
+\[
+ d_h\ge\left(\frac{p-3/2}{c+p-1}-o(1)\right)n .
+\]
+\end{corollary}
+
 \begin{corollary}[Counting threshold]\label{cor:adaptivewidth}
 There are absolute constants such that every \(\varepsilon\)-accurate head
 with \(\varepsilon<1/(2n)\) satisfies
@@ -1145,6 +1153,19 @@ row-center and rank-factor the construction of Theorem~\ref{thm:upper},
 store its query and key factors in the \(e_j\), set \(u_j=0\), and let
 \(Q,K\) select the blocks: a content-independent \(\varepsilon\)-accurate
 head with the same radius.
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:adaptivebudget}]
+Set \(\varepsilon=n^{-p}\).  Theorem~\ref{thm:adaptive} gives the uniform
+margins \(\delta=1144\,n^{1-p}\) and \(\gamma=(p-1)\log n-\log192\) on
+\(I=\{12,\ldots,n-1\}\), and the witness satisfies \(\rho(S(0))\le d_h\)
+and \(B(S(0))\le B_\infty\).  Proposition~\ref{prop:hadamard} and the proof
+of Corollary~\ref{cor:budget} run verbatim on \(I\), with \(m=n-12\) in
+place of \(N\): the rearranged inequality reads
+\(m\log(\gamma/(\delta\sqrt m))\le(m-1)\log2+d_h\log(2B_\infty/\delta)\),
+whose left side is \(m\bigl((p-3/2)\log n+O(\log\log n)\bigr)\) and whose
+right side is at most \((m-1)\log2+d_h\bigl((c+p-1)\log n+O(1)\bigr)\).
+Dividing by \(m\log n\) and using \(m=n(1-o(1))\) proves the claim.
 \end{proof}
 
 \begin{proof}[Proof of Corollary~\ref{cor:adaptivewidth}]
