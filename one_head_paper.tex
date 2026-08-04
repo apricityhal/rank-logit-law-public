@@ -1,0 +1,1035 @@
+\documentclass[10pt]{article}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[margin=0.74in]{geometry}
+\usepackage{amsmath,amssymb,amsthm,mathtools}
+\usepackage{booktabs}
+\usepackage{float}
+\usepackage{microtype}
+\usepackage{multicol}
+\usepackage{pgfplots}
+\usepackage{titlesec}
+\usepackage{xcolor}
+\usepackage[numbers,sort&compress]{natbib}
+\usepackage[pdftitle={What a causal mask is worth: a rank-logit law for prefix averaging},
+  colorlinks=true,linkcolor=blue!45!black,citecolor=blue!45!black,
+  urlcolor=blue!45!black]{hyperref}
+
+\pgfplotsset{compat=1.18}
+\newtheorem{theorem}{Theorem}
+\newtheorem{proposition}[theorem]{Proposition}
+\newtheorem{corollary}[theorem]{Corollary}
+\newtheorem{lemma}[theorem]{Lemma}
+\theoremstyle{definition}
+\newtheorem{definition}[theorem]{Definition}
+\DeclareMathOperator{\rank}{rank}
+\DeclareMathOperator{\osc}{osc}
+\newcommand{\R}{\mathbb R}
+\newcommand{\one}{\mathbf 1}
+\newcommand{\softmax}{\operatorname{softmax}}
+\newcommand{\Stirling}[2]{\genfrac{\{}{\}}{0pt}{}{#1}{#2}}
+\titlespacing*{\section}{0pt}{1.35ex plus .3ex minus .2ex}{.65ex}
+\titlespacing*{\subsection}{0pt}{1.0ex plus .2ex minus .1ex}{.45ex}
+
+\title{\vspace{-2.2em}\bfseries What a causal mask is worth:\\
+a rank--logit law for prefix averaging}
+\author{}
+\date{}
+
+\begin{document}
+\maketitle
+\vspace{-3.8em}
+
+\begin{abstract}
+A causal mask realizes prefix averaging with zero learned scores.  We measure
+the matrix-level resources used by a position-dependent unmasked softmax head
+at one fixed sequence length.  For row-centered score rank \(r\), the minimum
+centered logit radius at worst-row output error \(n^{-p}\), with fixed \(p>1\)
+and fixed \(r\), satisfies
+\[
+ \log B=\frac{n-1}{r}
+ \bigl((p-1)\log n+\log\log n+O_{p,r}(1)\bigr).
+\]
+The formula resolves both diverging terms in the fixed-rank exponent at every
+fixed polynomial target.  The proof expands a determinant for the lower bound and builds a
+cost-balanced rank-\(r\) matrix for the upper bound.  A companion estimate
+uniform in rank forces \(\Omega(n)\) rank under a polynomial radius budget when
+\(p>3/2\).  A factor-norm inequality transfers the radius
+requirement to dot-product factors.  In a range-only exact-real model, the
+finite float32 factor range excludes the \(p=2\) target for position-indexed
+pure dot-product scores at head dimension
+\(128\) once \(n\ge4166\).  The same
+exact-real, float32-range assumptions require ambient head dimension above
+\(252\) at \(n=8192\).  A finite-size audit places the construction between a
+row-weighted determinant bound and its closed-form budget.  Every statement
+concerns one fixed pure dot-product attention matrix and holds uniformly over
+bounded value streams while that matrix stays fixed.
+\end{abstract}
+
+\section{Introduction}
+
+For prefix averaging, a causal mask supplies a moving support boundary while
+keeping every visible score flat.  Let
+\[
+ T(i,j)=\frac1i\mathbf 1[j\le i]
+\]
+be the prefix-average operator.  A masked head with every visible score equal
+to zero realizes \(T\) exactly.  An unmasked softmax assigns positive mass to
+every key.  Accurate realization requires nearly equal scores on each prefix
+together with strong suppression of every future key.  Low score rank makes
+that joint cost accumulate across positions.
+
+For an unmasked score matrix \(S\), let
+\(P_0=I_n-\one\one^\top/n\).  The centered score rank is
+\(\rho(S)=\rank(SP_0)\) and centered logit radius
+\(B(S)=\max_{i,j}|(SP_0)(i,j)|\).  For a dot-product head of dimension
+\(d_h\), \(\rho(S)\le d_h\).  Any matrix with \(\rho(S)\le r\) admits an
+\(r\)-dimensional factorization because
+\(\softmax(S)=\softmax(SP_0)\).  Equal finite row-softmax matrices have logits
+that differ by rowwise constants, since their pairwise log-probability ratios
+agree.  Thus \(\rho\) is the minimum factor dimension after quotienting row
+shifts.  At every fixed \(p>1\) and fixed
+\(r\), the main theorem gives
+\[
+ r\log B(S)
+ =(n-1)\bigl((p-1)\log n+\log\log n+O_{p,r}(1)\bigr)
+\]
+at the optimum for error \(n^{-p}\).  For a position-dependent dot-product head with fixed
+dimension \(d_h\), the required
+centered score magnitude grows as \(\exp(\Theta(n\log n/d_h))\).  A fixed
+polynomial score budget requires dimension growing linearly with sequence
+length when \(p>3/2\).  The excluded lengths in Section~\ref{sec:numerical}
+sit one to two orders of magnitude below deployed decoder contexts.
+
+The result concerns one fixed, length-specific pure dot-product matrix evaluated
+uniformly over bounded value streams.  Section~\ref{sec:scope} states the
+remaining model boundaries.
+
+The table compares the realizations at a common accuracy \(\varepsilon\).  Its
+third row uses \(\varepsilon=n^{-p}\) for fixed \(p>1\), where the two-term law
+applies.  The masked row uses zero learned scores.  Its architectural support
+constraint supplies the forbidden entries and falls outside the score charge.
+\begin{center}
+\begin{tabular}{lccc}
+\toprule
+realization & accuracy & centered score rank
+ & realized centered-logit radius \\
+\midrule
+causally masked & any \(\varepsilon\) & \(0\) & \(0\) \\
+unmasked, full centered rank & any \(\varepsilon\) & \(n-1\)
+ & \(O(\log(n/\varepsilon))\) \\
+unmasked, fixed rank \(r\) & \(\varepsilon=n^{-p}\) & \(r\) &
+\(\exp(\Theta(n\log n/r))\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The lower-bound proof takes first differences across all causal boundaries,
+producing a square matrix whose strict lower triangle is small, whose diagonal
+is large, and whose rank is at most \(r\).  A columnwise determinant expansion
+removes every term that uses more than \(r\) columns from this matrix, giving
+the factor \((n-1)/r\) that fixed \((r+1)\)-minors miss.  Because the argument
+works on principal submatrices, it can omit inaccurate rows.
+
+The upper bound assigns the nonterminal rows to \(r\) consecutive blocks.
+Score drops grow geometrically inside each block, with block boundaries chosen
+to balance their logarithmic cost.  The lower and upper bounds agree through
+\((p-1)\log n\) and \(\log\log n\) in the exponent.
+
+\section{Operational model}
+
+Let \(S(i,j)=\langle q_i,k_j\rangle\) and
+\(A=\softmax_{\rm row}(S)\).  We take \(S\) to be the entire pre-softmax
+score matrix.  Any additive positional-bias matrix belongs in \(S\) and in
+its rank and radius charges.  The conventional
+\(1/\sqrt{d_h}\) scale can be absorbed into the factors.  Softmax is invariant
+under row shifts, so
+\(SP_0\) is the identifiable score matrix.  Its radius controls every
+within-row score difference:
+\[
+ |S(i,j)-S(i,t)|\le 2B(S).
+\]
+For a bounded value stream \(v\), the output is \(Av\).  The operational
+error is
+\begin{equation}\label{eq:operator}
+ \sup_{\|v\|_\infty\le1}\|(A-T)v\|_\infty
+ =\max_i\|A(i,:)-T(i,:)\|_1 .
+\end{equation}
+H\"older's inequality gives the upper bound, and the sign vector of the
+largest-error row gives equality.  The metric asks one realized attention
+matrix to average every bounded value stream.
+
+Uniformity ranges over separate value streams while \(A\) stays fixed.  A
+single fixed value matrix tests the column span that it presents to the head.
+
+The radius \(B(S)\) also admits an architectural bound.
+
+\begin{proposition}[Factor-norm bound]\label{prop:norms}
+Let \(S=QK^\top\) with rows \(q_i,k_j\in\R^{d_h}\), and let
+\(\bar k=\frac1n\sum_jk_j\).  Then
+\begin{equation}\label{eq:norms}
+ B(S)\le\max_i\|q_i\|_2\cdot\max_j\|k_j-\bar k\|_2 .
+\end{equation}
+If in addition every entry of \(Q\) and \(K\) has magnitude at most \(F\),
+then \(\log B(S)\le\log 2+\log d_h+2\log F\).
+\end{proposition}
+
+\begin{proof}
+Row \(i\) of \(SP_0\) has entries
+\(\langle q_i,k_j\rangle-\frac1n\sum_t\langle q_i,k_t\rangle
+=\langle q_i,k_j-\bar k\rangle\), and Cauchy--Schwarz gives
+\eqref{eq:norms}.  Under the entrywise bound,
+\(\|q_i\|_2\le\sqrt{d_h}F\) and
+\(\|k_j-\bar k\|_2\le2\sqrt{d_h}F\).
+\end{proof}
+
+The lower bounds force a product of query and centered-key norm
+envelopes.  A finite exponent range places an additive cap on \(\log B(S)\).
+Under the conventional
+\(1/\sqrt{d_h}\) scaling the right-hand side of \eqref{eq:norms} is divided by
+\(\sqrt{d_h}\).
+
+Write \([m]=\{1,\ldots,m\}\).  For a finite set, \(\osc\) denotes the maximum
+minus the minimum, and \(\Stirling{m}{k}\) denotes a Stirling number of the
+second kind.  Let
+\(I\subseteq[n-1]\) and put
+\[
+ I^+=I\cup\{j+1:j\in I\}.
+\]
+Row \(i\in I\) has a causal \((\delta_i,\gamma_i)\) profile
+\emph{on \(I\)} when
+\begin{equation}\label{eq:profile}
+ \osc_{j\in I^+,\ j\le i}S(i,j)\le\delta_i,
+ \qquad S(i,i+1)\le S(i,i)-\gamma_i.
+\end{equation}
+Accuracy sets explicit row-dependent parameters.
+
+\begin{lemma}[Output error gives score geometry]\label{lem:profile}
+If \(\max_j|A(i,j)-T(i,j)|\le\varepsilon\) and \(i\varepsilon<1/2\), then
+row \(i\) satisfies \eqref{eq:profile} on every \(I\), with
+\begin{equation}\label{eq:rowprofile}
+ \delta_i=\log\frac{1+i\varepsilon}{1-i\varepsilon},
+ \qquad
+ \gamma_i=\log\frac{1-i\varepsilon}{i\varepsilon}.
+\end{equation}
+\end{lemma}
+
+The hypothesis uses the entrywise matrix error
+\(\max_{i,j}|A(i,j)-T(i,j)|\le\varepsilon\).  It follows from the operational
+row-\(\ell_1\) metric \(\|A(i,:)-T(i,:)\|_1\le\varepsilon\) in
+\eqref{eq:operator}.  Section~\ref{sec:mechanism} constructs a matrix that
+attains the row-\(\ell_1\) target.  The norm sandwich
+\(\|x\|_\infty\le\|x\|_q\le\|x\|_1\) establishes the same two-term law for
+maximum row-\(\ell_q\) error at every fixed \(1\le q\le\infty\).  In probe
+language, entrywise matrix error corresponds to value streams with
+\(\|v\|_1\le1\).
+
+The scale \(1/n\) has a direct interpretation.  For a binary value stream,
+\(i(Tv)_i\) is an integer prefix sum.  Rounding \(i(Av)_i\) recovers that sum
+whenever the scalar output error is below \(1/(2i)\).  The eligibility
+condition \(i\varepsilon<1/2\) marks this recovery scale.  Fixed targets
+\(n^{-p}\), \(p>1\), give every nonterminal boundary a polynomial margin.
+
+\section{The rank--logit law}
+
+The finite inequality below supplies the matrix-theoretic core.
+
+\begin{theorem}[Row-subset determinant bound]\label{thm:subset}
+Let \(\varnothing\ne I\subseteq[n-1]\), \(m=|I|\), and suppose the rows in
+\(I\) satisfy \eqref{eq:profile} on \(I\), with positive
+\(\delta_i,\gamma_i\).  If \(1\le r\),
+\(\rho(S)\le r\) and \(B(S)\le B\), then
+\begin{equation}\label{eq:weighted}
+ \prod_{i\in I}\gamma_i
+ \le
+ \sum_{k=1}^{\min\{r,m\}}
+ k!\Stirling{m}{k}(2B)^k
+ \max_{\substack{R\subseteq I\\|R|=k}}
+ \prod_{i\in I\setminus R}\delta_i .
+\end{equation}
+If additionally \(\delta_i\le\delta\) and
+\(\gamma_i\ge\gamma\) on \(I\), then
+\begin{equation}\label{eq:constant}
+ \gamma^m\le
+ \sum_{k=1}^{\min\{r,m\}}
+ k!\Stirling{m}{k}\delta^{m-k}(2B)^k .
+\end{equation}
+\end{theorem}
+
+The theorem uses the eligible rows in \(I\), meaning rows with
+\(i\varepsilon<1/2\).  Accuracy on \(\alpha n\) such rows replaces the
+determinant size \(n-1\) by \(\alpha n\), up to rounding; a corresponding
+uniform asymptotic law also requires their \(\delta_i,\gamma_i\) to have
+uniform margins.  When
+\(\varepsilon=o(1/n)\), every nonterminal row is eligible, and average row
+error at most \(\varepsilon/2\) supplies at least \(n/2-1\) accurate
+nonterminal rows by Markov's inequality, up to rounding.  The determinant
+argument uses only this rowwise consequence.
+
+For \(0<\varepsilon<1\) and \(1\le r\le n-1\), define
+\[
+ B^{\rm out}_{r}(n,\varepsilon)=\inf\left\{B(S):
+ \rho(S)\le r,\ 
+ \sup_{\|v\|_\infty\le1}\|(A-T)v\|_\infty\le\varepsilon\right\},
+ \qquad B^{\rm out}_{r,p}(n)=B^{\rm out}_{r}(n,n^{-p}).
+\]
+Write \(N=n-1\) through the rest of this section.
+
+\begin{theorem}[Cost-balanced rank-\(r\) construction]\label{thm:upper}
+Let \(n\ge2\), \(0<\varepsilon\le1/n\), \(N=n-1\), and
+\(1\le r\le N\).  There is \(S\in\R^{n\times n}\) with
+\(\rank(S)=\rho(S)=r\), output error at most \(\varepsilon\), and
+\begin{equation}\label{eq:upperbudget}
+ \log B(S)\le
+ \frac Nr\log\frac{64e\log(8n/\varepsilon)}{n\varepsilon}
+ +\log\log\frac{8n}{\varepsilon}.
+\end{equation}
+\end{theorem}
+
+\begin{theorem}[Two-term fixed-rank output law]\label{thm:sharp}
+For every fixed \(p>1\) and fixed positive integer \(r\),
+\begin{equation}\label{eq:sharp}
+ \log B^{\rm out}_{r,p}(n)
+ =\frac{n-1}{r}
+ \bigl((p-1)\log n+\log\log n+O_{p,r}(1)\bigr).
+\end{equation}
+\end{theorem}
+
+\begin{proof}
+Set \(\varepsilon=n^{-p}\).  For all sufficiently large \(n\), every
+nonterminal row is eligible in Lemma~\ref{lem:profile}, and
+\[
+ \delta_i\le\delta=2n^{1-p}(1+o(1)),\qquad
+ \gamma_i\ge\gamma=(p-1)\log n+o(1).
+\]
+Two entries in a profiled row differ by at least \(\gamma\), so
+\(2B\ge\gamma\).  Eventually \(\gamma\ge\delta\) and \(N\ge r\).  Apply
+Theorem~\ref{thm:subset} with \(I=[N]\).  The estimates
+\(k!\Stirling{N}{k}\le k^N\le r^N\) give
+\[
+ \gamma^N\le r^{N+1}\delta^{N-r}(2B)^r,
+ \qquad
+ \log B\ge\frac Nr\log\frac{\gamma}{r\delta}
+ +\log\frac{\delta}{2}-\frac1r\log r.
+\]
+Here
+\[
+ \log\frac{\gamma}{r\delta}
+ =(p-1)\log n+\log\log n+O_{p,r}(1).
+\]
+The remaining term \(\log(\delta/2)=O_p(\log n)\) fits inside
+\((N/r)O_{p,r}(1)\), which proves the required lower estimate.
+
+Theorem~\ref{thm:upper} supplies a score matrix whose output error is at most
+\(\varepsilon\) and whose radius obeys
+\[
+ \log B\le\frac Nr
+ \log\frac{64e\log(8n/\varepsilon)}{n\varepsilon}
+ +\log\log\frac{8n}{\varepsilon}.
+\]
+Substitution of \(\varepsilon=n^{-p}\) turns the logarithm multiplied by
+\(N/r\) into
+\((p-1)\log n+\log\log n+O_p(1)\).  Its final additive term is
+\(O_p(\log\log n)\), which also fits inside \((N/r)O_{p,r}(1)\).
+\end{proof}
+
+The \(O_{p,r}(1)\) term permits a multiplicative
+\(\exp(O(n/r))\) uncertainty in \(B\).
+\footnote{For growing \(r\), the permutation count in
+\eqref{eq:constant} contributes \(-((n-1)/r)\log r\).
+Appendix~\ref{app:hadamard} gives a complementary Hadamard bound that removes
+\(\log r\) at a cost of \(\tfrac12\log n\), together with the all-rank floor
+\(B\ge\max_i\gamma_i/2\).}
+
+\begin{corollary}[Head-dimension tradeoff]\label{cor:head}
+Fix \(p>1\) and \(d_h\).  A position-dependent unmasked pure dot-product
+head of dimension
+\(d_h\) that reaches error \(n^{-p}\) obeys, for some constant
+\(C_{p,d_h}\) and all sufficiently large \(n\),
+\[
+ d_h\log B(S)\ge
+ (n-1)\bigl((p-1)\log n+\log\log n-C_{p,d_h}\bigr).
+\]
+\end{corollary}
+
+The fixed-rank remainder depends on \(r\).  After normalization by \(N/r\),
+the budget in \eqref{eq:upperbudget} equals
+\((p-1)\log n+\log\log n+O_p(1)\) uniformly for
+\(r=o(N/\log\log n)\).  The determinant count introduces \(-\log r\) into
+the lower estimate.  Both diverging terms continue to match when
+\(\log r=o(\log\log n)\); equation~\eqref{eq:sharp} states the asymptotic with
+\(r\) fixed.  At full centered rank, Proposition~\ref{prop:fullrank} attains
+\(\log B=\log\log(n/\varepsilon)+O(1)\).  At \(r=N\), the closed-form budget
+\eqref{eq:upperbudget} gives
+\((p-1)\log n+2\log\log n+O_p(1)\), and the singleton-block realization itself
+has \(\log B=\log\log n+O_p(1)\).  Appendix~\ref{app:hadamard} develops the
+growing-rank estimate.
+
+\begin{corollary}[Polynomial radius budget]\label{cor:budget}
+Fix \(p>3/2\) and \(c>0\).  A score matrix with \(B(S)\le n^c\) and output
+error at most \(n^{-p}\) has
+\[
+ \rho(S)\ge
+ \left(\frac{p-3/2}{c+p-1}-o(1)\right)n.
+\]
+\end{corollary}
+
+The present uniform-in-rank Hadamard estimate yields a positive coefficient
+for \(p>3/2\).  Behavior at the threshold remains open.
+
+The finite inequality separates the accuracy regimes more precisely than a
+single asymptotic formula.
+
+\begin{center}
+\begin{tabular}{lll}
+\toprule
+accuracy \(\varepsilon\) & eligible rows & status for fixed \(r\) \\
+\midrule
+\(n^{-p}\), fixed \(p>1\) & all nonterminal
+ & two-term law, Theorem~\ref{thm:sharp} \\
+general \(o(1/n)\) & all nonterminal
+ & two bounds with unmatched leading terms \\
+\(c/n\), fixed \(c>0\) & linear subset
+ & \(\Omega_{c,r}(n/r)\) to \(O_{c,r}(n\log\log n/r)\) \\
+\(1/n\ll\varepsilon\ll1\) & \(\Theta(1/\varepsilon)\)
+ & lower bound; construction open \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+At \(\varepsilon=1/(n\log n)\), the determinant bound gives
+\((N/r)(\log\log n+\log\log\log n+O(1))\).  The budget in
+\eqref{eq:upperbudget} gives \((N/r)(2\log\log n+O(1))\).  Their leading
+coefficients differ, which restricts \eqref{eq:sharp} to polynomial targets.
+For \(\varepsilon=c/n\) with fixed \(c>0\), a doubly logarithmic gap remains.
+At larger \(\varepsilon\), Lemma~\ref{lem:profile} certifies
+\(\Theta(1/\varepsilon)\) rows.  That count records the reach of the current
+proof.  The behavior of \(B^{\rm out}_r\) across the \(1/n\) scale remains an
+open question.
+
+Full centered rank changes the scaling.
+
+\begin{proposition}[Full-rank two-level scores]\label{prop:fullrank}
+For \(\Gamma>0\), set
+\[
+ S_\Gamma(i,j)=-\Gamma\,\mathbf1[j>i].
+\]
+Then \(\rank(S_\Gamma P_0)=n-1\), \(B(S_\Gamma)\le\Gamma\), and every
+nonterminal row has a causal \((0,\Gamma)\) profile on every \(I\).  Taking
+\(\Gamma=\log(2(n-1)/\varepsilon)\), for \(0<\varepsilon\le1\), gives
+output error at most \(\varepsilon\).
+\end{proposition}
+
+\begin{proof}
+The submatrix on rows \(1,\ldots,n-1\) and columns \(2,\ldots,n\) is
+upper triangular with diagonal \(-\Gamma\), so \(\rank(S_\Gamma)\ge n-1\).
+Column \(1\) of \(S_\Gamma\) is zero, since \(1>i\) fails for every
+\(i\ge1\), so \(e_1\in\ker S_\Gamma\), the rank is exactly \(n-1\), and
+\(\ker S_\Gamma=\operatorname{span}\{e_1\}\).  If
+\(S_\Gamma P_0x=0\), then \(P_0x\) lies in this kernel and has coordinate
+sum zero, which gives \(P_0x=0\) and
+\(\ker(S_\Gamma P_0)=\operatorname{span}\{\one\}\).  The centered rank is
+\(n-1\).  Row centering keeps every
+entry within the raw row range \(\Gamma\).  The future leakage in every row
+is at most \((n-1)e^{-\Gamma}\le\varepsilon/2\); the prefix conditional
+distribution is uniform, so the row-\(\ell_1\) error is at most
+\(\varepsilon\).
+\end{proof}
+
+The matrix \(S_\Gamma\) gives a finite-\(\Gamma\) approximation to the causal
+mask.  It uses full centered rank and a growing realized radius to approximate
+the architectural support boundary.
+
+\section{Determinant mechanism and matching construction}\label{sec:mechanism}
+
+Let \(N=n-1\), let \(\Delta\in\R^{n\times N}\) be the first-difference
+operator, and take the first \(N\) rows of \(S\Delta\):
+\[
+ D(i,j)=S(i,j+1)-S(i,j).
+\]
+Since \(P_0\Delta=\Delta\), \(\rank(D)\le\rho(S)\).  Row \(i\)'s profile
+gives a small strict lower triangle and a large diagonal:
+\[
+ |D(i,j)|\le\delta_i\quad(j<i),\qquad
+ D(i,i)\le-\gamma_i.
+\]
+Let \(U\) be the upper-triangular part of \(D\) and \(E=D-U\).  Then
+\(|\det U|\ge\prod_i\gamma_i\).  Expand \(\det(D-E)\) by columns.  A term
+using more than \(r\) columns of \(D\) vanishes by rank.  Summed over all
+\(k\)-subsets \(K\) of columns drawn from \(D\), the number of surviving pairs
+\((K,\pi)\) is \(k!\Stirling{N}{k}\); the count for an individual \(K\) is at
+most this and depends on \(K\).  Each term uses \(k\) entries bounded by \(2B\) and
+\(N-k\) lower-triangular entries.  Keeping their row indices yields
+\eqref{eq:weighted}.  Taking a principal submatrix \(D[I,I]\) proves the
+row-subset form.  Appendix~\ref{app:determinant} supplies the complete
+counting argument.
+
+The construction balances row budgets over \(r\) consecutive blocks.  One
+outer product creates the score drops inside each block.  Appendix~\ref{app:construction}
+gives the factorization and verifies its centered rank,
+row error, and radius bound \eqref{eq:upperbudget}.
+
+\section{Numerical checks and factor range}\label{sec:numerical}
+
+The audit evaluates the explicit construction and the finite determinant
+inequality at \(p=2\).  High-precision decimal arithmetic computes the
+row-\(\ell_1\) error and centered radius.  The lower curve solves
+\eqref{eq:weighted} with the row profile from Lemma~\ref{lem:profile} and the
+all-rank floor.
+
+Every quantity in the finite inequality is measurable on a realized score
+matrix: per-row oscillations and drops, the centered radius, and the factor
+dimension can be read off logits directly, so \eqref{eq:weighted} evaluates
+at any \((n,r,\varepsilon)\) with no asymptotic step.  The test is
+one-directional: violation excludes accuracy \(\varepsilon\) for the measured
+resources; satisfaction certifies nothing.
+
+For a radius value \(B\), define its normalized remainder at \(p=2\), the
+value used throughout this section, by
+\[
+ R_{n,r}(B)=\frac{r}{n-1}\log B-\bigl(\log n+\log\log n\bigr),
+\]
+the general leading term being \((p-1)\log n+\log\log n\).
+Theorem~\ref{thm:sharp} predicts \(R_{n,r}=O_r(1)\) for fixed \(r\).
+Figure~\ref{fig:bracket} places the construction between the finite lower bound
+and its closed-form budget in all 36 records.  Every measured row error is
+below \(0.251\,n^{-2}\).  The displayed interval bounds the unknown optimum.
+
+\begin{figure}[H]
+\centering
+\begin{tikzpicture}
+\begin{axis}[
+ width=.47\linewidth,height=4.4cm,
+ xlabel={length \(n\)},ylabel={normalized remainder \(R_{n,r}\)},
+ xmin=10,xmax=66,ymin=-4.2,ymax=9.6,ytick={-4,-2,0,2,4,6,8},
+ grid=major,tick label style={font=\footnotesize},label style={font=\small},
+ legend style={font=\scriptsize,at={(.5,1.02)},anchor=south,
+               legend columns=3}]
+\addplot+[mark=square*,black]
+ table[x=n,y=upper_budget_remainder,col sep=comma,
+ restrict expr to domain={\thisrow{rank}}{1:1}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{budget \(r{=}1\)}
+\addplot+[mark=*,blue!70!black]
+ table[x=n,y=constructed_remainder,col sep=comma,
+ restrict expr to domain={\thisrow{rank}}{1:1}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{construction \(r{=}1\)}
+\addplot+[mark=triangle*,orange!85!black]
+ table[x=n,y=lower_remainder,col sep=comma,
+ restrict expr to domain={\thisrow{rank}}{1:1}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{lower \(r{=}1\)}
+\addplot+[mark=square,black,densely dotted]
+ table[x=n,y=upper_budget_remainder,col sep=comma,
+ restrict expr to domain={\thisrow{rank}}{8:8}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{budget \(r{=}8\)}
+\addplot+[mark=o,blue!70!black,densely dotted]
+ table[x=n,y=constructed_remainder,col sep=comma,
+ restrict expr to domain={\thisrow{rank}}{8:8}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{construction \(r{=}8\)}
+\addplot+[mark=triangle,orange!85!black,densely dotted]
+ table[x=n,y=lower_remainder,col sep=comma,
+ restrict expr to domain={\thisrow{rank}}{8:8}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{lower \(r{=}8\)}
+\end{axis}
+\end{tikzpicture}\hfill
+\begin{tikzpicture}
+\begin{axis}[
+ width=.47\linewidth,height=4.4cm,
+ xlabel={centered rank \(r\)},ylabel={\(\log B\) at \(n=64\)},
+ xmode=log,log basis x=2,xtick={1,2,4,8},xmin=.85,xmax=9.5,ymin=0,ymax=800,
+ grid=major,tick label style={font=\footnotesize},label style={font=\small},
+ legend style={font=\scriptsize,at={(.98,.98)},anchor=north east}]
+\addplot+[mark=triangle*,orange!85!black]
+ table[x=rank,y=log_B_lower_weighted,col sep=comma,
+ restrict expr to domain={\thisrow{n}}{64:64}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{weighted determinant lower}
+\addplot+[mark=*,blue!70!black]
+ table[x=rank,y=log_B_constructed,col sep=comma,
+ restrict expr to domain={\thisrow{n}}{64:64}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{realized construction}
+\addplot+[mark=square*,black,dashed]
+ table[x=rank,y=log_B_upper_budget,col sep=comma,
+ restrict expr to domain={\thisrow{n}}{64:64}]
+ {experiments/output/one_head_bracket.csv};
+\addlegendentry{closed-form budget}
+\end{axis}
+\end{tikzpicture}
+\caption{Finite-size construction and bracket at \(p=2\).  Left: the three
+normalized remainders as \(n\) varies, with \(r=1\) solid and \(r=8\) dotted.
+At \(n=64\), the full bracket spans \(6.12\) nats for \(r=1\) and \(9.25\)
+for \(r=8\).  Right: the row-weighted determinant lower bound, realized
+construction, and closed-form budget at \(n=64\).}
+\label{fig:bracket}
+\end{figure}
+
+\subsection{A representability corollary}
+
+Proposition~\ref{prop:norms} converts the finite lower bound into a statement
+about every exact-real head with bounded factor entries.
+
+\begin{corollary}[Representable factors]\label{cor:precision}
+Fix \(p>1\) and a floating-point format whose largest finite magnitude is
+\(F\).  Let \(Q,K\in\R^{n\times d_h}\) have entries bounded in magnitude by
+\(F\), and evaluate \(QK^\top\) and softmax over the exact reals.  Worst-row
+error at most \(n^{-p}\) requires the finite inequality
+\eqref{eq:weighted}, with \(r=d_h\), to admit
+\(\log B\le\log 2+\log d_h+2\log F\).  Failure of this condition excludes
+such a head.
+\end{corollary}
+
+The floating-point format supplies a dynamic-range bound on exact-real factors.
+Evaluation of \eqref{eq:weighted} at \(p=2\) gives the table.  Each entry is
+the largest \(n\) admitted by the finite bound.  The bfloat16 and float32
+thresholds are computed from distinct exact maxima (\(\log F=88.7189\) and
+\(88.7228\)); both round to the displayed value, and the admitted lengths
+coincide.
+
+\begin{center}
+\begin{tabular}{lccccc}
+\toprule
+format & \(\log F\) & \(d_h=8\) & \(32\) & \(64\) & \(128\) \\
+\midrule
+float16          & \(11.09\) & \(65\)  & \(262\)  & \(531\)  & \(1075\) \\
+bfloat16         & \(88.72\) & \(268\) & \(1053\) & \(2093\) & \(4165\) \\
+float32          & \(88.72\) & \(268\) & \(1053\) & \(2093\) & \(4165\) \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The first failing length remains excluded as \(n\) grows because each
+\(\delta_i\) decreases and each \(\gamma_i\) increases on the same eligible
+row subset.  At \(n=8192\), the finite inequality gives \(\log B\ge418.72\)
+for \(r=128\).  Proposition~\ref{prop:norms} then forces
+\[
+ \max_i\|q_i\|_2\max_j\|k_j-\bar k\|_2\ge e^{418.72}.
+\]
+The same calculation excludes ambient dimensions through \(252\) for
+float32 or bfloat16 and through \(934\) for float16.  Every claim in this
+paragraph uses exact-real evaluation with the stated factor envelope.
+
+For scale, deployed decoder contexts run from \(1.3\times10^{5}\) to beyond
+\(10^{6}\) positions \cite{llama3herd,gemini15}; every admitted length in
+the table lies below \(4.2\times10^{3}\), and the anchor length \(n=8192\)
+is a sixteenth of the shorter figure.
+
+\section{Related work}
+
+Dimension bottlenecks give the nearest architectural statements.  Projection
+dimension at least the sequence length realizes an arbitrary positive
+column-stochastic pattern exactly, and below it some pattern fails
+\cite{bhojanapalli2020}.  Rank trades against head count for a
+nearest-neighbor target, exponentially in the rank deficit \(d-r\)
+\cite{amsel2024}.  Patterns with at most \(k\) nonzero entries per row and
+column admit a ratio-preserving approximation at query/key dimension
+logarithmic in length, with a \(k^2\) factor \cite{likhosherstov2023}.  That
+guarantee constrains only ratios among entries the target leaves nonzero.
+Each charges a dimension; we solve for the magnitude a fixed dimension then
+requires, at \(k=\Theta(n)\), for one named pattern.
+
+One-layer lower bounds differ from ours in currency.  Sparse averaging over
+input-specified positions charges embedding dimension \(m\) against bit
+precision \(p\), with \(mp=\Omega(q)\), by set disjointness
+\cite{sanford2023}.  Computing the frequency of the most frequent element charges
+\(dhp=\Omega(\min\{m,n\})\) for dictionary size \(m\)
+\cite{yehudai2024count}.  Its counting construction sets the query matrix to
+zero---the score matrix is then input-independent---so that head is uniform
+over the whole context, with centered rank \(0\) and radius \(0\) here.
+Global averaging is free; the moving prefix boundary carries the entire
+price.  Infinite precision removes bit counting, leaving embedding dimension
+and output-MLP size \cite{kozachinskiy2024}.  We charge logit magnitude under
+exact reals instead.  Bounded entries also govern the computational side:
+subquadratic attention algorithms exist exactly when query/key entries stay
+\(o(\sqrt{\log n})\) \cite{alman2023}; theirs bounds the time to compute a
+realized matrix, ours the magnitude required to realize one.
+
+Bounded logit spread forces global softmax attention to disperse as sequence
+length grows \cite{velickovic2025}.  The same work reports average spreads
+of \(5.69\) and \(5.82\) for Gemma 2B and 7B, with observed maxima \(14.78\)
+and \(32.74\); no rank enters.  Lee studies row-centered logits---for an
+unmasked head, our \(SP_0\)---under the name energy field and reports
+concentration of their empirical singular spectrum \cite{lee2026}.  Effective
+numerical rank requires a perturbation analysis before it can replace the
+exact rank in our theorem.
+
+The one-sided determinant proof is related to Alon's two-sided
+perturbed-identity rank theorem \cite{alon2009}, and to the
+\(\varepsilon\)-rank line that charges rank alone, with no magnitude budget
+\cite{alon2013approx}.  The unnormalized prefix-sum matrix underlying \(T\)
+is factorized in the differentially private continual-observation line at a
+factor-norm cost logarithmic in the horizon, additively and without a rank
+constraint \cite{fichtenberger2023}.
+
+Construction-oriented treatments of transformers list prefix averaging as a
+basic ingredient, \((1/i)\sum_{k\le i}x_k\), obtained from the causal mask
+\cite{yang2025cookbook}.  The formal-transducer line uses masked
+average-hard attention for the same prefix aggregation \cite{strobl2025}.
+Neither charges a score magnitude for it.  Within the fixed-matrix exact-real
+model of this paper, the law supplies the price of that ingredient once the
+mask is removed: at fixed centered rank \(r\) and worst-row error \(n^{-p}\),
+the centered logit radius must reach \(\exp(\Theta(n\log n/r))\), so a
+position-indexed score matrix that replaces an architectural support boundary
+pays a cost the masked realization does not.  The statement concerns one
+fixed score matrix at one length, evaluated uniformly over bounded value
+streams, and makes no claim about trained content-adaptive queries and keys,
+whose scores vary with the input.
+
+\vspace{.65ex}
+\section{Scope}\label{sec:scope}
+
+The theorem concerns a fixed attention matrix that stays constant across
+bounded value probes.  Taking \(V=I_n\) reveals the matrix in one pass, while
+scalar probes give an equivalent test.  Content-adaptive queries and keys need
+probe channels decoupled from their computation, for example value channels
+that the query and key projections ignore.  The model grants free
+position-indexed tables \(Q\) and \(K\) at each length.  A shared positional
+generator and downstream correction fall beyond this matrix-level claim.
+
+The rank charge covers the pure dot-product logits.  An additive positional
+bias belongs in \(S\) when it is part of that score matrix.  A separate
+T5-style bias can carry the full-rank step pattern from
+Proposition~\ref{prop:fullrank}; its capacity falls beyond the \(d_h\) charge.
+An ALiBi-style decay also has its own positional channel, whose varying prefix
+scores alone fail to give uniform prefix weights.
+
+\appendix
+
+\section{Output error and score geometry}\label{app:profile}
+
+\begin{proof}[Proof of Lemma~\ref{lem:profile}]
+For \(j\le i\), \(T(i,j)=1/i\), so entrywise error at most \(\varepsilon\)
+gives
+\[
+ \frac{1-i\varepsilon}{i}\le A(i,j)\le
+ \frac{1+i\varepsilon}{i}.
+\]
+Score differences are logarithms of probability ratios, so the oscillation on
+every subset of prefix columns is at most \(\delta_i\).  For the adjacent key,
+\(T(i,i+1)=0\) gives \(A(i,i+1)\le\varepsilon\), while
+\(A(i,i)\ge(1-i\varepsilon)/i\), which yields
+\[
+ S(i,i+1)-S(i,i)
+ =\log\frac{A(i,i+1)}{A(i,i)}
+ \le-\log\frac{1-i\varepsilon}{i\varepsilon}.
+\]
+\end{proof}
+
+\section{Determinant proof}\label{app:determinant}
+
+\begin{lemma}[Permitted permutation count]\label{lem:count}
+For \(1\le k\le m\),
+\[
+ \#\bigl\{(\pi,K):K\subseteq[m],\ |K|=k,\ \pi\in\mathfrak S_m,\
+ \ \pi(j)>j\text{ for all }j\notin K\bigr\}
+ =k!\Stirling{m}{k}.
+\]
+\end{lemma}
+
+\begin{proof}
+Fix \(K\) and write \([m]\setminus K=\{l_1<\cdots<l_{m-k}\}\).
+Assign images to \(l_{m-k},\ldots,l_1\) in that order.  When \(l_i\) is
+reached, its admissible values \(\{l_i+1,\ldots,m\}\) number \(m-l_i\).
+When \(i<m-k\), all \(m-k-i\) values already assigned exceed
+\(l_{i+1}>l_i\); at \(i=m-k\), no values have yet been assigned.  Exactly
+\(k+i-l_i\) choices remain.  Since \(l_i\ge i\) and \(l_i\le k+i\), every
+factor lies in \(\{0,\ldots,k\}\).  The \(k\) unused values go to \(K\) in
+\(k!\) ways, so the count for fixed \(K\) is
+\[
+ k!\prod_{i=1}^{m-k}(k+i-l_i).
+\]
+
+Put \(a_i=l_i-i\), the number of elements of \(K\) below \(l_i\).  Then
+\(K\mapsto(a_1\le\cdots\le a_{m-k})\) is a bijection onto weakly increasing
+sequences in \(\{0,\ldots,k\}\).  Reversing the order and setting
+\(i_j=k-a_{m-k+1-j}\) gives
+\[
+ \sum_K\prod_{i=1}^{m-k}(k+i-l_i)
+ =\sum_{0\le i_1\le\cdots\le i_{m-k}\le k}i_1\cdots i_{m-k}
+ =\sum_{1\le i_1\le\cdots\le i_{m-k}\le k}i_1\cdots i_{m-k}
+ =h_{m-k}(1,2,\ldots,k)
+ =\Stirling{m}{k}.
+\]
+Terms containing a zero factor vanish, which gives the second equality.  The
+last identity follows from
+\[
+ h_d(1,\ldots,k)=h_d(1,\ldots,k-1)+k\,h_{d-1}(1,\ldots,k).
+\]
+With \(d=m-k\), this is the Stirling recurrence
+\(\Stirling{m}{k}=\Stirling{m-1}{k-1}+k\Stirling{m-1}{k}\).
+The initial values \(h_0(1,\ldots,k)=1\) and
+\(h_d(1)=1\) match \(\Stirling{k}{k}=1\) and
+\(\Stirling{m}{1}=1\).
+\end{proof}
+
+\begin{proof}[Proof of Theorem~\ref{thm:subset}]
+Take the principal submatrix \(D_I=D[I,I]\).  Its rank is at most \(r\).
+Let \(U_I\) be its upper-triangular part and \(E_I=D_I-U_I\).  Then
+\[
+ |\det U_I|\ge\prod_{i\in I}\gamma_i,\qquad U_I=D_I-E_I.
+\]
+Expand the determinant multilinearly in columns.  Index a term by
+\(K\subseteq I\), the columns drawn from \(D_I\); the remaining columns come
+from \(E_I\).  Terms with \(|K|>r\) vanish.  The last column of \(E_I\) is
+zero, so every surviving term has \(|K|\ge1\).
+
+Fix \(|K|=k\).  Order \(I\) increasingly and identify it with \([m]\).
+In the Leibniz expansion, a product can be nonzero when
+\(\pi(j)>j\) for every \(j\notin K\), because column \(j\) of \(E_I\) is
+supported strictly below row \(j\).  Lemma~\ref{lem:count} counts the pairs
+\((\pi,K)\) with this property.
+
+Every product uses \(k\) entries bounded by \(2B\).  The other \(m-k\)
+entries have distinct row indices and contribute at most
+\[
+ \max_{\substack{R\subseteq I\\|R|=k}}
+ \prod_{i\in I\setminus R}\delta_i .
+\]
+Summing absolute values proves \eqref{eq:weighted}; replacing all
+\(\delta_i,\gamma_i\) by their common bounds proves
+\eqref{eq:constant}.
+\end{proof}
+
+\section{Hadamard companion and all-rank floor}
+\label{app:hadamard}
+
+\begin{proposition}\label{prop:hadamard}
+Under the constant-profile hypotheses of
+Theorem~\ref{thm:subset}, with \(m=|I|\),
+\[
+ \gamma^m\le
+ \sum_{k=1}^{\min\{r,m\}}
+ e_{m-k}(1,\sqrt2,\ldots,\sqrt{m-1})\,
+ \delta^{m-k}(2B\sqrt m)^k ,
+\]
+where \(e_j\) is the elementary symmetric polynomial.  Also
+\[
+ B\ge\gamma/2.
+\]
+More generally, for row-dependent gaps in Theorem~\ref{thm:subset},
+\[
+ B\ge\frac12\max_{i\in I}\gamma_i.
+\]
+\end{proposition}
+
+\begin{proof}
+Use the same column expansion.  A column \(j\) drawn from \(E_I\) has norm at
+most \(\delta\sqrt{m-j}\), and a column drawn from \(D_I\) has norm at most
+\(2B\sqrt m\).  Hadamard's inequality and summation over the selected columns
+give the displayed elementary symmetric polynomial.  Profiled row \(i\)
+contains two entries separated by at least \(\gamma_i\); after centering, one
+has magnitude at least \(\gamma_i/2\).  Maximizing over the profiled rows gives
+the general floor, including its constant-profile specialization.
+\end{proof}
+
+\begin{proof}[Proof of Corollary~\ref{cor:budget}]
+Take \(I=[N]\) and use
+\[
+ e_{N-k}(1,\sqrt2,\ldots,\sqrt{N-1})
+ \le\binom{N-1}{k-1}(\sqrt N)^{N-k}.
+\]
+Proposition~\ref{prop:hadamard} gives \(2B\ge\gamma\); in the present output
+profile, \(\gamma\ge\delta\) for all sufficiently large \(n\).  For every
+\(k\le r\),
+\[
+ (\delta\sqrt N)^{N-k}(2B\sqrt N)^k
+ \le(\delta\sqrt N)^{N-r}(2B\sqrt N)^r.
+\]
+Summing the binomial coefficients yields
+\[
+ \gamma^N\le
+ 2^{N-1}(\delta\sqrt N)^{N-r}(2B\sqrt N)^r,
+\]
+and rearrangement gives
+\[
+ N\log\frac{\gamma}{\delta\sqrt N}
+ \le(N-1)\log2+r\log\frac{2B}{\delta}.
+\]
+At \(\varepsilon=n^{-p}\), Lemma~\ref{lem:profile} gives
+\(\gamma=(p-1)\log n\,(1+o(1))\) and
+\(\delta=2n^{1-p}(1+o(1))\), so the left side is
+\(N((p-3/2)\log n+O(\log\log n))\).  With \(B\le n^c\),
+\(\log(2B/\delta)\le(c+p-1)\log n+O(1)\).  Dividing by
+\(N\log n\) proves the corollary.
+\end{proof}
+
+\section{The upper construction}\label{app:construction}
+
+\begin{proof}[Proof of Theorem~\ref{thm:upper}]
+For \(1\le i\le N\), set
+\[
+ \delta_i=\frac{i\varepsilon}{16},\qquad
+ \gamma_i=\log\frac{8(n-i)}{i\varepsilon},\qquad
+ w_i=\log\left(1+\frac{\gamma_i}{\delta_i}\right).
+\]
+When \(0<\varepsilon\le1/n\), their margins satisfy
+\begin{equation}\label{eq:margins}
+ \delta_i=\frac{i\varepsilon}{16}\le\frac1{16},
+ \qquad
+ \gamma_i=\log\frac{8(n-i)}{i\varepsilon}\ge\log 8,
+ \qquad
+ \frac{\gamma_i}{\delta_i}\ge16\log 8>33,
+\end{equation}
+using \(i\varepsilon\le N/n<1\) and \(n-i\ge1\).  These inequalities give
+\(e^{\delta_i}\le e^{1/16}<2\) and \(\gamma_i>\delta_i\).
+
+Partition \([N]\) into exactly \(r\) consecutive
+nonempty blocks so that, for every \(I=\{a,\ldots,b\}\),
+\[
+ \sum_{t=a+1}^{b}w_t\le W/r,\qquad W=\sum_{i=1}^Nw_i.
+\]
+A greedy partition creates at most \(r\) blocks: at each cut, the completed
+internal load plus the skipped boundary weight exceeds \(W/r\), and these
+charged sets are disjoint.  If fewer blocks appear, \(r\le N\) guarantees a
+block with at least two rows.  Splitting such blocks reaches exactly \(r\)
+and removes internal transitions.
+
+For one block, define
+\[
+ c_a=1,\qquad G_t=\sum_{s=a}^{t}\gamma_sc_s,\qquad
+ c_t=\frac{G_{t-1}}{\delta_t}\quad(t>a),
+\]
+\[
+ u_i^I=\frac{\mathbf1[i\in I]}{c_i},\qquad
+ v_j^I=-\sum_{t=a}^{\min\{b,j-1\}}\gamma_tc_t,
+\qquad
+ S=\sum_Iu^I(v^I)^\top .
+\]
+The \(u^I\) have disjoint nonempty supports.  The first differences of the
+\(v^I\) have disjoint nonempty supports as well, so \(\rank(S)=r\).  Suppose
+\(\sum_I a_IP_0v^I=0\).  Then \(\sum_Ia_Iv^I\) is constant.  Taking first
+differences and using their disjoint nonzero supports gives \(a_I=0\) for
+every block, so \(\rho(S)=r\).
+
+By \eqref{eq:margins}, \(G_{t-1}\ge\gamma_ac_a=\gamma_a\ge\log8\) and
+\(\delta_t\le1/16\), so every \(c_t\ge1\).
+
+For \(i\in I=[a,b]\), the row has the explicit form
+\[
+ S(i,j)=
+ \begin{cases}
+  0,&j\le a,\\
+  -G_{j-1}/c_i,&a<j\le b+1,\\
+  -G_b/c_i,&j>b+1.
+ \end{cases}
+\]
+Its prefix scores have maximum zero and range at most \(\delta_i\).  The
+score drops by \(\gamma_i\) after key \(i\).  Let \(\one_i\) denote the
+length-\(i\) all-ones vector, and let
+\(z_j=-S(i,j)\in[0,\delta_i]\) for \(j\le i\).  By
+\eqref{eq:margins},
+\[
+ G_t/G_{t-1}=1+\gamma_t/\delta_t\ge2,
+\]
+so geometric summation gives \(\sum_{j\le i}z_j\le2\delta_i\).  Put
+\(a_j=e^{-z_j}\), \(Z=\sum_{j\le i}a_j\), and let \(\widehat q\) denote the
+attention distribution conditioned on the prefix.  Since
+\(Z\ge i e^{-\delta_i}\) and \(1-e^{-z_j}\le z_j\),
+\[
+ \sum_{j\le i}\left|\frac{a_j}{Z}-\frac1i\right|
+ \le \frac{2}{Z}\sum_{j\le i}(1-a_j)
+ \le \frac{2e^{\delta_i}}i\sum_{j\le i}z_j.
+\]
+Using \(e^{\delta_i}<2\) from \eqref{eq:margins} now gives
+\[
+ \left\|\widehat q-\frac{\one_i}{i}\right\|_1
+ \le\frac{2e^{\delta_i}}i\sum_{j\le i}z_j
+ \le\frac{4e^{\delta_i}\delta_i}i
+ =\frac{e^{\delta_i}\varepsilon}4
+ \le\varepsilon/2.
+\]
+Every future score is at most \(-z_i-\gamma_i\), and each prefix score is at
+least \(-z_i\).  The future-to-prefix mass ratio bounds the future probability
+\(\lambda_i\), giving
+\[
+ \lambda_i\le\frac{n-i}{i}e^{-\gamma_i}=\varepsilon/8.
+\]
+On the prefix, \(A(i,:)= (1-\lambda_i)\widehat q\).  The triangle inequality
+gives full row error at most
+\(\varepsilon/2+2\lambda_i\le3\varepsilon/4\).  Row \(n\) is exact.
+
+For a block,
+\[
+ G_b=\gamma_a\prod_{t=a+1}^{b}
+ \left(1+\frac{\gamma_t}{\delta_t}\right),
+\]
+so \(\log G_b\le\log L_\varepsilon+W/r\), where
+\(L_\varepsilon=\log(8n/\varepsilon)\).  Since
+\(\gamma_t\le L_\varepsilon\), \(\gamma_t/\delta_t>1\), and
+\(N!\ge(N/e)^N\),
+\[
+ w_t\le\log\frac{32L_\varepsilon}{t\varepsilon},
+\]
+\[
+ W\le N\log\frac{32L_\varepsilon}{\varepsilon}-\log N!
+ \le N\log\frac{32eL_\varepsilon}{N\varepsilon}
+ \le N\log\frac{64eL_\varepsilon}{n\varepsilon}.
+\]
+Since every \(c_i\ge1\), row \(i\) of \(S\) has entries \(v^I_j/c_i\) of
+magnitude at most \(G_b\).  Its range bounds every centered entry, which gives
+\eqref{eq:upperbudget}.
+\end{proof}
+
+\section{Experimental details}\label{app:experiment}
+
+{\scriptsize\raggedright
+The offline executable audit is
+\path{experiments/run_one_head_experiments.py}; it writes
+\path{experiments/output/one_head_bracket.csv},
+\path{experiments/output/one_head_anchor.csv}, and
+\path{experiments/output/one_head_thresholds.csv}, together with
+\path{experiments/output/environment.txt}.\par}
+
+The bracket grid uses
+\(n\in\{12,16,20,24,32,40,48,56,64\}\) and
+\(r\in\{1,2,4,8\}\).  The program constructs rank-one block factors from
+binary64-generated budgets.  High-precision decimal arithmetic recomputes each
+worst-row error and centered radius.  The program also solves
+\eqref{eq:weighted} and evaluates \eqref{eq:upperbudget}.  Decimal precision follows the proved budget
+with 80 guard digits.
+
+The threshold audit generates the representability table and the ambient
+dimension crossings at \(n=8192\).  Its length searches record the last
+admitted value followed by the first excluded value.  Dimension searches
+record the last excluded value followed by the first admitted value.  The
+environment file identifies the interpreter, platform, Decimal exponent
+limit, and truncation cutoff used to produce the artifacts.  Each search
+records its two-sided decision margin; the smallest reported is
+\(2.3\times10^{-4}\) nats.  The companion program
+\path{experiments/certify_one_head_thresholds.py} recomputes every reported
+crossing and the \(n=8192\) anchor bound with exact integer Stirling numbers
+and outward-rounded interval arithmetic, certifying each decision in
+\path{experiments/output/one_head_interval_certificates.csv}.  The program
+\path{experiments/verify_finite_inequalities.py} checks the permutation
+count of Lemma~\ref{lem:count} exhaustively through \(m=8\) and inequalities
+\eqref{eq:weighted}, \eqref{eq:constant}, and the Hadamard companion
+directly on every bracket instance.
+
+A Lean~4 development accompanies the project.  For the statements of this
+paper it machine-checks the centered-rank-one, constant-profile
+specialization of Theorem~\ref{thm:subset}: with the causal-difference
+profile taken as a hypothesis, \(\gamma^N\le2B\,\delta^{N-1}\) for every
+positive boundary count \(N\) (\path{C17/OneHead.lean}, building against
+Mathlib alone).  The development builds with no \texttt{sorry} and no
+project axiom, and its theorems depend only on \texttt{propext},
+\texttt{Classical.choice}, and \texttt{Quot.sound}.  The general row-subset
+inequality, the permutation count of Lemma~\ref{lem:count}, the Hadamard
+companion, and the construction of Theorem~\ref{thm:upper} are not
+formalized; their finite-instance verification is the executable audit
+above.
+
+\begin{multicols}{2}
+\footnotesize
+\interlinepenalty=10000
+\setlength{\bibsep}{1pt}
+\bibliographystyle{abbrvnat}
+\bibliography{audited_references}
+\end{multicols}
+
+\end{document}

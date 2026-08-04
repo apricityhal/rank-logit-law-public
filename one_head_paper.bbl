@@ -1,0 +1,112 @@
+\begin{thebibliography}{16}
+\providecommand{\natexlab}[1]{#1}
+\providecommand{\url}[1]{\texttt{#1}}
+\expandafter\ifx\csname urlstyle\endcsname\relax
+  \providecommand{\doi}[1]{doi: #1}\else
+  \providecommand{\doi}{doi: \begingroup \urlstyle{rm}\Url}\fi
+
+\bibitem[Alman and Song(2023)]{alman2023}
+J.~Alman and Z.~Song.
+\newblock Fast attention requires bounded entries.
+\newblock \emph{arXiv preprint arXiv:2302.13214}, 2023.
+
+\bibitem[Alon(2009)]{alon2009}
+N.~Alon.
+\newblock Perturbed identity matrices have high rank: Proof and applications.
+\newblock \emph{Combinatorics, Probability and Computing}, 18\penalty0
+  (1--2):\penalty0 3--15, 2009.
+\newblock \doi{10.1017/S0963548307008917}.
+
+\bibitem[Alon et~al.(2013)Alon, Lee, Shraibman, and Vempala]{alon2013approx}
+N.~Alon, T.~Lee, A.~Shraibman, and S.~Vempala.
+\newblock The approximate rank of a matrix and its algorithmic applications.
+\newblock In \emph{Proceedings of the 45th Annual ACM Symposium on Theory of
+  Computing}, 2013.
+
+\bibitem[Amsel et~al.(2024)Amsel, Yehudai, and Bruna]{amsel2024}
+N.~Amsel, G.~Yehudai, and J.~Bruna.
+\newblock On the benefits of rank in attention layers.
+\newblock \emph{arXiv preprint arXiv:2407.16153}, 2024.
+
+\bibitem[Bhojanapalli et~al.(2020)Bhojanapalli, Yun, Rawat, Reddi, and
+  Kumar]{bhojanapalli2020}
+S.~Bhojanapalli, C.~Yun, A.~S. Rawat, S.~Reddi, and S.~Kumar.
+\newblock Low-rank bottleneck in multi-head attention models.
+\newblock In \emph{Proceedings of the 37th International Conference on Machine
+  Learning}, volume 119 of \emph{Proceedings of Machine Learning Research},
+  pages 864--873, 2020.
+
+\bibitem[Fichtenberger et~al.(2022)Fichtenberger, Henzinger, and
+  Upadhyay]{fichtenberger2023}
+H.~Fichtenberger, M.~Henzinger, and J.~Upadhyay.
+\newblock Constant matters: Fine-grained error bound on differentially private
+  continual observation using completely bounded norms.
+\newblock \emph{arXiv preprint arXiv:2202.11205}, 2022.
+
+\bibitem[{Gemini Team, Google}(2024)]{gemini15}
+{Gemini Team, Google}.
+\newblock {Gemini} 1.5: Unlocking multimodal understanding across millions of
+  tokens of context.
+\newblock \emph{arXiv preprint arXiv:2403.05530}, 2024.
+
+\bibitem[Kozachinskiy(2024)]{kozachinskiy2024}
+A.~Kozachinskiy.
+\newblock Lower bounds on transformers with infinite precision.
+\newblock \emph{arXiv preprint arXiv:2412.20195}, 2024.
+
+\bibitem[Lee(2026)]{lee2026}
+W.~Lee.
+\newblock On the invariants of softmax attention.
+\newblock \emph{arXiv preprint arXiv:2605.02907}, 2026.
+\newblock URL \url{https://arxiv.org/html/2605.02907v1}.
+
+\bibitem[Likhosherstov et~al.(2023)Likhosherstov, Choromanski, and
+  Weller]{likhosherstov2023}
+V.~Likhosherstov, K.~Choromanski, and A.~Weller.
+\newblock On the expressive flexibility of self-attention matrices.
+\newblock In \emph{Proceedings of the AAAI Conference on Artificial
+  Intelligence}, volume~37, pages 8773--8781, 2023.
+\newblock \doi{10.1609/aaai.v37i7.26055}.
+
+\bibitem[{Llama Team, AI @ Meta}(2024)]{llama3herd}
+{Llama Team, AI @ Meta}.
+\newblock The {Llama} 3 herd of models.
+\newblock \emph{arXiv preprint arXiv:2407.21783}, 2024.
+
+\bibitem[Sanford et~al.(2023)Sanford, Hsu, and Telgarsky]{sanford2023}
+C.~Sanford, D.~Hsu, and M.~Telgarsky.
+\newblock Representational strengths and limitations of transformers.
+\newblock In \emph{Advances in Neural Information Processing Systems},
+  volume~36, 2023.
+
+\bibitem[Strobl et~al.(2025)Strobl, Angluin, Chiang, Rawski, and
+  Sabharwal]{strobl2025}
+L.~Strobl, D.~Angluin, D.~Chiang, J.~Rawski, and A.~Sabharwal.
+\newblock Transformers as transducers.
+\newblock \emph{Transactions of the Association for Computational Linguistics},
+  13:\penalty0 200--219, 2025.
+\newblock \doi{10.1162/tacl_a_00736}.
+
+\bibitem[Veli{\v c}kovi{\'c} et~al.(2025)Veli{\v c}kovi{\'c}, Perivolaropoulos,
+  Barbero, and Pascanu]{velickovic2025}
+P.~Veli{\v c}kovi{\'c}, C.~Perivolaropoulos, F.~Barbero, and R.~Pascanu.
+\newblock Softmax is not enough (for sharp size generalisation).
+\newblock In \emph{Proceedings of the 42nd International Conference on Machine
+  Learning}, volume 267 of \emph{Proceedings of Machine Learning Research},
+  2025.
+
+\bibitem[Yang et~al.(2026)Yang, Watson, Xue, Bhattamishra, Llarena, Merrill,
+  Dos Santos~Ferreira, Svete, and Chiang]{yang2025cookbook}
+A.~Yang, C.~Watson, A.~Xue, S.~Bhattamishra, J.~Llarena, W.~Merrill, E.~Dos
+  Santos~Ferreira, A.~Svete, and D.~Chiang.
+\newblock The transformer cookbook.
+\newblock \emph{Transactions on Machine Learning Research}, 2026.
+\newblock URL \url{https://openreview.net/forum?id=sPshCSvDrX}.
+
+\bibitem[Yehudai et~al.(2024)Yehudai, Kaplan, Ghandeharioun, Geva, and
+  Globerson]{yehudai2024count}
+G.~Yehudai, H.~Kaplan, A.~Ghandeharioun, M.~Geva, and A.~Globerson.
+\newblock When can transformers count to \(n\)?
+\newblock \emph{arXiv preprint arXiv:2407.15160}, 2024.
+
+\end{thebibliography}

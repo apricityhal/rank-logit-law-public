@@ -1,0 +1,6 @@
+python           3.14.6 (CPython)
+platform         macOS-26.4-arm64-arm-64bit-Mach-O
+machine          arm64
+processor        arm
+decimal Emin     -999999
+log weight floor 100000
