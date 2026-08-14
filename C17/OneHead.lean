@@ -9,7 +9,7 @@ import Mathlib.Tactic.Ring
 # The one-head causal-profile lower bound
 
 This file formalizes the rank-one specialization of the row-subset determinant
-bound in `main_paper.tex` and `published_appendix.tex`.
+bound in `rank_logit_law_final.tex`.
 
 There are `N + 1` tokens and `N` causal boundaries.
 `CenteredRankAtMostOne S` states that the score matrix has rank at most one

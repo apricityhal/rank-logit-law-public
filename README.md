@@ -6,11 +6,12 @@ against this repository root.
 
 ## Contents
 
-- `one_head_paper.tex`, `audited_references.bib`, `one_head_paper.bbl` —
-  manuscript source. Build with `latexmk -pdf one_head_paper.tex`
-  (Figure 1 reads `experiments/output/one_head_bracket.csv` at compile time;
-  needs pgfplots 1.18, natbib, microtype).
-- `one_head_paper.pdf` — compiled manuscript.
+- `rank_logit_law_final.tex`, `audited_references.bib`,
+  `rank_logit_law_final.bbl` — manuscript source in TMLR submission format.
+  Build with `latexmk -pdf rank_logit_law_final.tex` (Figure 1 reads
+  `experiments/output/one_head_bracket.csv` at compile time; needs
+  pgfplots 1.18 and microtype; `tmlr.sty` and `tmlr.bst` are included).
+- `rank_logit_law_final.pdf` — compiled manuscript.
 - `experiments/run_one_head_experiments.py` — offline executable audit
   (standard library only). Regenerates every CSV in `experiments/output/`.
 - `experiments/certify_one_head_thresholds.py` — certifies every reported
