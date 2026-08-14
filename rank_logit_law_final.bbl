@@ -33,11 +33,11 @@ Srinadh Bhojanapalli, Chulhee Yun, Ankit~Singh Rawat, Sashank Reddi, and Sanjiv
   tokens of context.
 \newblock \emph{arXiv preprint arXiv:2403.05530}, 2024.
 
-\bibitem[Lee(2026)]{lee2026}
+\bibitem[Lee(2026)]{lee2026compress}
 Wonsuk Lee.
-\newblock On the invariants of softmax attention.
-\newblock \emph{arXiv preprint arXiv:2605.02907}, 2026.
-\newblock URL \url{https://arxiv.org/html/2605.02907v1}.
+\newblock Compressible softmax-attended language under incompressible
+  attention.
+\newblock \emph{arXiv preprint arXiv:2604.04384}, 2026.
 
 \bibitem[Likhosherstov et~al.(2023)Likhosherstov, Choromanski, and
   Weller]{likhosherstov2023}
